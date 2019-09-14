@@ -28,7 +28,7 @@
 #define waitTime                                1
 using namespace Arena;
 
-int GetPolarizeData(IImage* pImage, void* pDeg0, void* pDeg45, void* pDeg90, void* pDeg135){
+void GetPolarizeData(IImage* pImage, void* pDeg0, void* pDeg45, void* pDeg90, void* pDeg135){
     const uint32_t pixelFormat = static_cast<uint32_t>(pImage->GetPixelFormat());
     uint8_t* inputBuff = const_cast<uint8_t*>(pImage->GetData());
     uint8_t* src = inputBuff;
@@ -48,12 +48,14 @@ int GetPolarizeData(IImage* pImage, void* pDeg0, void* pDeg45, void* pDeg90, voi
             srcImage += 2;
         }
     }
-    return 0;
 }
 
+//I_max, I_minを計算
+void CalculateIntensity(void* pDeg0, void* pDeg45, void* pDeg90, void* pDeg135){
+}
 
 //OpenCVで動画像を取得
-void OpencvVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap){
+void RunOpencvVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap){
     gcstring windowName = GetNodeValue<GenICam::gcstring>(pNodeMap, "DeviceModelName") + " (" + GetNodeValue<GenICam::gcstring>(pNodeMap, "DeviceSerialNumber") + ")";
 
     IImage *pImage;
@@ -72,9 +74,30 @@ void OpencvVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap){
         cv::waitKey(waitTime);
     }
     cv::destroyAllWindows();
-    pDevice->StopStream();
 }
 
+//偏光データを再生
+void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, void* pDeg0, void* pDeg45, void* pDeg90, void* pDeg135){
+
+    IImage *pImage;
+    cv::Mat img;
+
+    double framesPerSecond = GetNodeValue<double>(pNodeMap, "AcquisitionFrameRate");
+
+    for (int i = 0; i < framesPerSecond * numberOfSeconds;  i++){
+        pImage = pDevice->GetImage(TIMEOUT);
+        //偏光データを取得
+        GetPolarizeData(pImage, pDeg0, pDeg45, pDeg90, pDeg135);
+        img = cv::Mat((int)pImage->GetHeight()/2, (int)pImage->GetWidth()/2, CV_8UC1, (void *)pDeg0);
+        //イメージのリサイズ
+        cv::resize(img, img, cv::Size(), 0.5, 0.5);
+
+        cv::imshow("polarizeddata", img);
+        pDevice->RequeueBuffer(pImage);
+        cv::waitKey(waitTime);
+    }
+    cv::destroyAllWindows();
+}
 
 // ストリームの開始，終了まではここで行う
 void AcquireImage( IDevice* pDevice ){
@@ -101,28 +124,26 @@ void AcquireImage( IDevice* pDevice ){
     GenApi::INodeMap* pNodeMap = pDevice->GetNodeMap();
     GenApi::CFloatPtr pExposureTimeNode = pNodeMap->GetNode("ExposureTime");
 
-    //動画像として再生
-    OpencvVideo(pDevice, pNodeMap);
+    //Rawデータを動画像として再生
+    //RunOpencvVideo(pDevice, pNodeMap);
 
-    //// 画像データの取得
+    // 画像データの取得
     //std::cout << "画像データを1枚取得\n";
     //IImage* pImage = pDevice->GetImage(TIMEOUT);
 
-    //// RAW画像から偏光データを抽出
-    //std::cout << "偏光データの抽出\n";
+    // RAW画像から偏光データを抽出
+    std::cout << "偏光データの抽出\n";
 
-    //std::unique_ptr<unsigned short> deg0(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
-    //std::unique_ptr<unsigned short> deg45(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
-    //std::unique_ptr<unsigned short> deg90(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
-    //std::unique_ptr<unsigned short> deg135(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
+    std::unique_ptr<unsigned short> deg0(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
+    std::unique_ptr<unsigned short> deg45(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
+    std::unique_ptr<unsigned short> deg90(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
+    std::unique_ptr<unsigned short> deg135(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
 
-    //GetPolarizeData(pImage, deg0.get(), deg45.get(), deg90.get(), deg135.get());
+    RunOpencvPolarizedVideo(pDevice, pNodeMap, deg0.get(), deg45.get(), deg90.get(), deg135.get());
 
-    //pDevice->RequeueBuffer(pImage);
-
-    //// ストリームの停止
-    //std::cout << "ストリームの停止\n";
-    //pDevice->StopStream();
+    // ストリームの停止
+    std::cout << "ストリームの停止\n";
+    pDevice->StopStream();
 }
 
 //デバイスとの接続，IDevice* pDeviceの生成
