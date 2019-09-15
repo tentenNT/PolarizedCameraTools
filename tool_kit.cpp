@@ -84,15 +84,18 @@ struct Polarized{
 
     // rho（DoLP, 偏光度）を計算
     void CalculateDoLP(){
-        rho = I_a - I_b;
+        rho = I_a / I_b;
     }
-
     // theta（AoLP，偏光角）を計算
     void CalculateAoLP(){
+        theta = C_1 / (2*I_a);
+        theta.forEach<float>([](float &p, const int * position) -> void{
+            p = acos(p);
+        });
+        theta = theta / 2;
     }
-
 };
-    
+
 
 
 //// OpenCVで動画像を取得
@@ -118,14 +121,15 @@ struct Polarized{
 //}
 
 // 偏光データを再生
-void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, void* pDeg0, void* pDeg45, void* pDeg90, void* pDeg135){
+void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polarized pol_chunk, std::string choice = "I_max"){
 
     IImage* pImage;
     cv::Mat img;
     double framesPerSecond = GetNodeValue<double>(pNodeMap, "AcquisitionFrameRate");
-    // Polarizedクラスのインスタンスを生成
-    Polarized pol_chunk(pDeg0, pDeg45, pDeg90, pDeg135);
 
+    //for文の中にif文が入ってしまっているのは馬鹿馬鹿しいので後々直す
+    //https://codeday.me/jp/qa/20181218/28477.html
+    //ファンクタ（関数オブジェクト）を使えば良いらしい
     for (int i = 0; i < framesPerSecond * STREAMINGTIME;  i++){
         pImage = pDevice->GetImage(TIMEOUT);
         // 偏光データを取得
@@ -133,30 +137,45 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, void*
         // cv::Mat型に変換
         pol_chunk.TranslatePointerToMatrix(pImage);
         pol_chunk.CalculateIntensity();
-        pol_chunk.I_max.convertTo(pol_chunk.I_max, CV_8UC1);
-        // イメージのリサイズ
-        // cv::resize(img, img, cv::Size(), 0.5, 0.5);
-        cv::imshow("polarizeddata", pol_chunk.I_max);
-        pDevice->RequeueBuffer(pImage);
-        cv::waitKey(WAITTIME);
-    }
-    cv::destroyAllWindows();
-    for (int i = 0; i < framesPerSecond * STREAMINGTIME;  i++){
-        pImage = pDevice->GetImage(TIMEOUT);
-        // 偏光データを取得
-        pol_chunk.GetPolarizedData(pImage);
-        // cv::Mat型に変換
-        pol_chunk.TranslatePointerToMatrix(pImage);
-        pol_chunk.CalculateIntensity();
-        pol_chunk.I_min.convertTo(pol_chunk.I_min, CV_8UC1);
-        // イメージのリサイズ
-        // cv::resize(img, img, cv::Size(), 0.5, 0.5);
-        cv::imshow("polarizeddata", pol_chunk.I_min);
+        if(choice == "I_max"){
+            pol_chunk.I_max.convertTo(pol_chunk.I_max, CV_8UC1);
+            cv::imshow("polarizeddata", pol_chunk.I_max);
+        }
+        else if(choice == "I_min"){
+            pol_chunk.I_min.convertTo(pol_chunk.I_min, CV_8UC1);
+            cv::imshow("polarizeddata", pol_chunk.I_min);
+        }
+        else if(choice == "rho"){
+            pol_chunk.CalculateDoLP();
+            pol_chunk.rho.convertTo(pol_chunk.rho, CV_8UC1, 255);
+            cv::imshow("polarizeddata", pol_chunk.rho);
+        }
+        else if(choice == "theta"){
+            pol_chunk.CalculateAoLP();
+            pol_chunk.theta.convertTo(pol_chunk.theta, CV_8UC1, 255 / M_PI);
+            cv::imshow("polarizeddata", pol_chunk.theta);
+        }
+
         pDevice->RequeueBuffer(pImage);
         cv::waitKey(WAITTIME);
     }
     cv::destroyAllWindows();
 }
+    //for (int i = 0; i < framesPerSecond * STREAMINGTIME;  i++){
+    //    pImage = pDevice->GetImage(TIMEOUT);
+    //    // 偏光データを取得
+    //    pol_chunk.GetPolarizedData(pImage);
+    //    // cv::Mat型に変換
+    //    pol_chunk.TranslatePointerToMatrix(pImage);
+    //    pol_chunk.CalculateIntensity();
+    //    pol_chunk.I_max.convertTo(pol_chunk.I_max, CV_8UC1);
+    //    // イメージのリサイズ
+    //    // cv::resize(img, img, cv::Size(), 0.5, 0.5);
+    //    cv::imshow("polarizeddata", pol_chunk.I_max);
+    //    pDevice->RequeueBuffer(pImage);
+    //    cv::waitKey(WAITTIME);
+    //}
+    //cv::destroyAllWindows();
 
 // ストリームの開始，終了まではここで行う
 void AcquireImage( IDevice* pDevice ){
@@ -198,7 +217,11 @@ void AcquireImage( IDevice* pDevice ){
     std::unique_ptr<unsigned short> deg90(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
     std::unique_ptr<unsigned short> deg135(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
 
-    RunOpencvPolarizedVideo(pDevice, pNodeMap, deg0.get(), deg45.get(), deg90.get(), deg135.get());
+    // Polarizedクラスのインスタンスを生成
+    Polarized pol_chunk(deg0.get(), deg45.get(), deg90.get(), deg135.get());
+    
+    //偏光動画像の再生
+    RunOpencvPolarizedVideo(pDevice, pNodeMap, pol_chunk, "theta");
 
     // ストリームの停止
     std::cout << "ストリームの停止\n";
