@@ -12,17 +12,20 @@
 #define WIDTH                                   2448
 #define HEIGHT                                  2048
 #define TIMEOUT                                 2000
-#define numberOfSeconds                         10
-#define waitTime                                1
+#define STREAMINGTIME                         10
+#define WAITTIME                                1
 
 using namespace Arena;
 
-//アクセス制限をかけたいけど現状では全てpublic
 struct Polarized{
-    //データメンバの宣言
+    //偏光情報へのポインタ
     void *pDeg0, *pDeg45, *pDeg90, *pDeg135;
-    float i_max, i_min, rho, theta;
+    //偏光情報をcv::Mat型にしたもの
     cv::Mat deg0_mat, deg45_mat, deg90_mat, deg135_mat;
+    //偏光パラメータの計算に使用
+    cv::Mat deg0_mat_f, deg45_mat_f, deg90_mat_f, deg135_mat_f, C_1, C_2, R, I_a, I_b;
+    //偏光のパラメータ
+    cv::Mat I_max, I_min, rho, theta;
 
     //コンストラクタ
     Polarized(void* pDeg0, void* pDeg45, void* pDeg90, void* pDeg135)
@@ -54,15 +57,39 @@ struct Polarized{
 
     // ポインタからcv::Matへ変換
     void TranslatePointerToMatrix(IImage* pImage){
-        deg0_mat = cv::Mat((int)pImage->GetHeight() / 2, (int)pImage->GetWidth() / 2, CV_8UC1, pDeg0);
-        deg45_mat = cv::Mat((int)pImage->GetHeight() / 2, (int)pImage->GetWidth() / 2, CV_8UC1, pDeg45);
-        deg90_mat = cv::Mat((int)pImage->GetHeight() / 2, (int)pImage->GetWidth() / 2, CV_8UC1, pDeg90);
-        deg135_mat = cv::Mat((int)pImage->GetHeight() / 2, (int)pImage->GetWidth() / 2, CV_8UC1, pDeg135);
-    };
+        int rows = (int)pImage->GetHeight() / 2;
+        int cols = (int)pImage->GetWidth() / 2;
+        deg0_mat = cv::Mat(rows, cols, CV_8UC1, pDeg0);
+        deg45_mat = cv::Mat(rows, cols, CV_8UC1, pDeg45);
+        deg90_mat = cv::Mat(rows, cols, CV_8UC1, pDeg90);
+        deg135_mat = cv::Mat(rows, cols, CV_8UC1, pDeg135);
+    }
 
     // I_max, I_minを計算
+    // 数式そのままなのでここでは命名規則は無視している
     void CalculateIntensity(){
-    };
+        deg0_mat.convertTo(deg0_mat_f, CV_32F);
+        deg45_mat.convertTo(deg45_mat_f, CV_32F);
+        deg90_mat.convertTo(deg90_mat_f, CV_32F);
+        deg135_mat.convertTo(deg135_mat_f, CV_32F);
+
+        C_1 = deg0_mat_f - deg90_mat_f;
+        C_2 = deg135_mat_f - deg45_mat_f;
+        cv::magnitude(C_1, C_2, R);
+        I_a = R / 2;
+        I_b = (deg0_mat_f + deg45_mat_f + deg90_mat_f + deg135_mat_f) / 4;
+        I_max = I_b + I_a;
+        I_min = I_b - I_a;
+    }
+
+    // rho（DoLP, 偏光度）を計算
+    void CalculateDoLP(){
+        rho = I_a - I_b;
+    }
+
+    // theta（AoLP，偏光角）を計算
+    void CalculateAoLP(){
+    }
 
 };
     
@@ -77,7 +104,7 @@ struct Polarized{
 //
 //    double framesPerSecond = GetNodeValue<double>(pNodeMap, "AcquisitionFrameRate");
 //
-//    for (int i = 0; i < framesPerSecond * numberOfSeconds;  i++){
+//    for (int i = 0; i < framesPerSecond * STREAMINGTIME;  i++){
 //        pImage = pDevice->GetImage(TIMEOUT);
 //        img = cv::Mat((int)pImage->GetHeight(), (int)pImage->GetWidth(), CV_8UC1, (void *)pImage->GetData());
 //        //イメージのリサイズ
@@ -85,7 +112,7 @@ struct Polarized{
 //
 //        cv::imshow(windowName.c_str(), img);
 //        pDevice->RequeueBuffer(pImage);
-//        cv::waitKey(waitTime);
+//        cv::waitKey(WAITTIME);
 //    }
 //    cv::destroyAllWindows();
 //}
@@ -96,22 +123,37 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, void*
     IImage* pImage;
     cv::Mat img;
     double framesPerSecond = GetNodeValue<double>(pNodeMap, "AcquisitionFrameRate");
-    // Polarizedクラスを生成
+    // Polarizedクラスのインスタンスを生成
     Polarized pol_chunk(pDeg0, pDeg45, pDeg90, pDeg135);
 
-    for (int i = 0; i < framesPerSecond * numberOfSeconds;  i++){
+    for (int i = 0; i < framesPerSecond * STREAMINGTIME;  i++){
         pImage = pDevice->GetImage(TIMEOUT);
         // 偏光データを取得
         pol_chunk.GetPolarizedData(pImage);
+        // cv::Mat型に変換
         pol_chunk.TranslatePointerToMatrix(pImage);
-        //img = cv::Mat((int)pImage->GetHeight() / 2, (int)pImage->GetWidth() / 2, CV_8UC1, (void *)pDeg90);
+        pol_chunk.CalculateIntensity();
+        pol_chunk.I_max.convertTo(pol_chunk.I_max, CV_8UC1);
         // イメージのリサイズ
-        img = pol_chunk.deg0_mat;
-        //std::cout << img << std::endl;
-        cv::resize(img, img, cv::Size(), 0.5, 0.5);
-        cv::imshow("polarizeddata", img);
+        // cv::resize(img, img, cv::Size(), 0.5, 0.5);
+        cv::imshow("polarizeddata", pol_chunk.I_max);
         pDevice->RequeueBuffer(pImage);
-        cv::waitKey(waitTime);
+        cv::waitKey(WAITTIME);
+    }
+    cv::destroyAllWindows();
+    for (int i = 0; i < framesPerSecond * STREAMINGTIME;  i++){
+        pImage = pDevice->GetImage(TIMEOUT);
+        // 偏光データを取得
+        pol_chunk.GetPolarizedData(pImage);
+        // cv::Mat型に変換
+        pol_chunk.TranslatePointerToMatrix(pImage);
+        pol_chunk.CalculateIntensity();
+        pol_chunk.I_min.convertTo(pol_chunk.I_min, CV_8UC1);
+        // イメージのリサイズ
+        // cv::resize(img, img, cv::Size(), 0.5, 0.5);
+        cv::imshow("polarizeddata", pol_chunk.I_min);
+        pDevice->RequeueBuffer(pImage);
+        cv::waitKey(WAITTIME);
     }
     cv::destroyAllWindows();
 }
@@ -198,4 +240,5 @@ int main(){
 
     return 0;
 }
+
 
