@@ -12,7 +12,7 @@
 #define WIDTH                                   2448
 #define HEIGHT                                  2048
 #define TIMEOUT                                 2000
-#define STREAMINGTIME                         10
+#define STREAMINGTIME                         100
 #define WAITTIME                                1
 
 using namespace Arena;
@@ -25,11 +25,20 @@ struct Polarized{
     //偏光パラメータの計算に使用
     cv::Mat deg0_mat_f, deg45_mat_f, deg90_mat_f, deg135_mat_f, C_1, C_2, R, I_a, I_b;
     //偏光のパラメータ
-    cv::Mat I_max, I_min, rho, theta;
+    cv::Mat I_max, I_min, rho, theta, theta_c3;
+
+    int rows, cols;
 
     //コンストラクタ
-    Polarized(void* pDeg0, void* pDeg45, void* pDeg90, void* pDeg135)
-        : pDeg0(pDeg0), pDeg45(pDeg45), pDeg90(pDeg90), pDeg135(pDeg135){}
+    Polarized(IDevice* pDevice, void* pDeg0, void* pDeg45, void* pDeg90, void* pDeg135)
+        : pDeg0(pDeg0), pDeg45(pDeg45), pDeg90(pDeg90), pDeg135(pDeg135){
+        IImage* pImage;
+        pImage = pDevice->GetImage(TIMEOUT);
+        rows = (int)pImage->GetHeight() / 2;
+        cols = (int)pImage->GetWidth() / 2;
+        pDevice->RequeueBuffer(pImage); // いらないかも
+        std::cout << rows << "\n" << cols << std::endl;
+ }
 
     void GetPolarizedData(IImage* pImage){
         uint8_t* inputBuff = const_cast<uint8_t*>(pImage->GetData());
@@ -92,7 +101,27 @@ struct Polarized{
         theta.forEach<float>([](float &p, const int * position) -> void{
             p = acos(p);
         });
-        theta = theta / 2;
+        // theta = theta / 2; // なぜ偏光角は0~180の間にある筈なのに2で割るのだろうか？
+    }
+
+    void ConvertAoLPmonoToHSV(){
+        cv::Mat mat_hsv(rows, cols, CV_8UC3);
+        cv::Mat mat_s(rows, cols, CV_8UC1);
+        cv::Mat mat_v(rows, cols, CV_8UC1);
+        //mat_c3.forEach<cv::Point3_<uint8_t>>([](cv::Point3_<uint8_t> &p, const int * position) -> void{
+        //    p.y = 255;
+        //    p.z = 255;
+        //});
+        mat_s.forEach<uint8_t>([](uint8_t &p, const int * position) -> void{
+            p = 255;
+        });
+        mat_v = mat_s;
+        theta = theta * 180/ M_PI;
+        theta.convertTo(theta, CV_8UC1);
+        const std::vector<cv::Mat> mv{theta, mat_s, mat_v};
+        cv::merge(mv, mat_hsv);
+        cv::cvtColor(mat_hsv, mat_hsv, cv::COLOR_HSV2BGR);
+        theta_c3 = mat_hsv;
     }
 };
 
@@ -153,6 +182,8 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polar
         else if(choice == "theta"){
             pol_chunk.CalculateAoLP();
             pol_chunk.theta.convertTo(pol_chunk.theta, CV_8UC1, 255 / M_PI);
+            //pol_chunk.ConvertAoLPmonoToHSV();
+            //cv::imshow("polarizeddata", pol_chunk.theta_c3);
             cv::imshow("polarizeddata", pol_chunk.theta);
         }
 
@@ -218,7 +249,7 @@ void AcquireImage( IDevice* pDevice ){
     std::unique_ptr<unsigned short> deg135(new unsigned short[(WIDTH / 2 ) * ( HEIGHT / 2 )]);
 
     // Polarizedクラスのインスタンスを生成
-    Polarized pol_chunk(deg0.get(), deg45.get(), deg90.get(), deg135.get());
+    Polarized pol_chunk(pDevice, deg0.get(), deg45.get(), deg90.get(), deg135.get());
     
     //偏光動画像の再生
     RunOpencvPolarizedVideo(pDevice, pNodeMap, pol_chunk, "theta");
