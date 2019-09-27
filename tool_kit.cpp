@@ -12,7 +12,7 @@
 #define WIDTH                                   2448
 #define HEIGHT                                  2048
 #define TIMEOUT                                 2000
-#define STREAMINGTIME                         100
+#define STREAMINGTIME                           100
 #define WAITTIME                                1
 
 using namespace Arena;
@@ -174,6 +174,11 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polar
             pol_chunk.I_min.convertTo(pol_chunk.I_min, CV_8UC1);
             cv::imshow("polarizeddata", pol_chunk.I_min);
         }
+        else if(choice == "I_max-I_min"){
+            cv::Mat img = pol_chunk.I_max - pol_chunk.I_min; // 何故かI_max, I_minをコンバートして計算すると駄目だった
+            img.convertTo(img, CV_8UC1);
+            cv::imshow("polarizeddata", img);
+        }
         else if(choice == "rho"){
             pol_chunk.CalculateDoLP();
             pol_chunk.rho.convertTo(pol_chunk.rho, CV_8UC1, 255);
@@ -181,10 +186,10 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polar
         }
         else if(choice == "theta"){
             pol_chunk.CalculateAoLP();
-            pol_chunk.theta.convertTo(pol_chunk.theta, CV_8UC1, 255 / M_PI);
-            //pol_chunk.ConvertAoLPmonoToHSV();
-            //cv::imshow("polarizeddata", pol_chunk.theta_c3);
-            cv::imshow("polarizeddata", pol_chunk.theta);
+            //pol_chunk.theta.convertTo(pol_chunk.theta, CV_8UC1, 255 / M_PI);
+            pol_chunk.ConvertAoLPmonoToHSV();
+            cv::imshow("polarizeddata", pol_chunk.theta_c3);
+            //cv::imshow("polarizeddata", pol_chunk.theta);
         }
 
         pDevice->RequeueBuffer(pImage);
