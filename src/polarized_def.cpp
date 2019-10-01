@@ -36,6 +36,7 @@ void Polarized::TranslatePointerToMatrix(IImage* pImage){
 
 // I_max, I_minを計算
 void Polarized::CalculateIntensity(){
+    //CV_8UC1は0~255だがCV_32FC1は0~1.0を取るので注意する必要がある
     deg0_mat.convertTo(deg0_mat_f, CV_32F);
     deg45_mat.convertTo(deg45_mat_f, CV_32F);
     deg90_mat.convertTo(deg90_mat_f, CV_32F);
@@ -84,6 +85,18 @@ void Polarized::ConvertAoLPmonoToHSV(){
     theta_c3 = mat_hsv;
 }
 
+// polarized関係ない
+void ApplyWhiteBalance(cv::Mat& img){
+    //CV_8UC3のままで計算したら飽和して出力がおかしくなった
+    //どうもuchar型で計算するのはよろしくないことが起こることが多いようだ
+    img.convertTo(img, CV_32FC3);
+    img.forEach<cv::Point3_<float>>([](cv::Point3_<float> &p, const int* position) -> void{
+        p.x *= BLUE_GAIN;
+        p.y *= GREEN_GAIN;
+        p.z *= RED_GAIN;
+    });
+    img.convertTo(img, CV_8UC3);
+}
 
 
 //// OpenCVで動画像を取得

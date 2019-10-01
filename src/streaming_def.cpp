@@ -21,14 +21,37 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polar
             pol_chunk.I_max.convertTo(pol_chunk.I_max, CV_8UC1);
             cv::imshow("polarizeddata", pol_chunk.I_max);
         }
+        if(choice == "I_max_color"){
+            pol_chunk.I_max.convertTo(pol_chunk.I_max, CV_8UC1);
+            cv::cvtColor(pol_chunk.I_max, pol_chunk.I_max, cv::COLOR_BayerBG2BGR);
+            ApplyWhiteBalance(pol_chunk.I_max);
+            cv::imshow("polarizeddata", pol_chunk.I_max);
+        }
         else if(choice == "I_min"){
             pol_chunk.I_min.convertTo(pol_chunk.I_min, CV_8UC1);
+            cv::imshow("polarizeddata", pol_chunk.I_min);
+        }
+        else if(choice == "I_min_color"){
+            pol_chunk.I_min.convertTo(pol_chunk.I_min, CV_8UC1);
+            cv::cvtColor(pol_chunk.I_min, pol_chunk.I_min, cv::COLOR_BayerBG2BGR);
+            ApplyWhiteBalance(pol_chunk.I_min);
             cv::imshow("polarizeddata", pol_chunk.I_min);
         }
         else if(choice == "I_max-I_min"){
             cv::Mat img = pol_chunk.I_max - pol_chunk.I_min; // 何故かI_max, I_minをコンバートして計算すると駄目だった
             img.convertTo(img, CV_8UC1);
             cv::imshow("polarizeddata", img);
+        }
+        else if(choice == "45"){
+            //cv::cvtColor(pol_chunk.deg45_mat, pol_chunk.deg45_mat, cv::COLOR_BayerBG2BGR);
+            cv::demosaicing(pol_chunk.deg45_mat, pol_chunk.deg45_mat, cv::COLOR_BayerBG2BGR);
+            ApplyWhiteBalance(pol_chunk.deg45_mat);
+            cv::imshow("polarizeddata", pol_chunk.deg45_mat);
+        }
+        // 出力が変なような
+        else if(choice == "R"){
+            pol_chunk.R.convertTo(pol_chunk.R, CV_8UC1);
+            cv::imshow("polarizeddata", pol_chunk.R);
         }
         else if(choice == "rho"){
             pol_chunk.CalculateDoLP();
@@ -48,21 +71,7 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polar
     }
     cv::destroyAllWindows();
 }
-    //for (int i = 0; i < framesPerSecond * STREAMINGTIME;  i++){
-    //    pImage = pDevice->GetImage(TIMEOUT);
-    //    // 偏光データを取得
-    //    pol_chunk.GetPolarizedData(pImage);
-    //    // cv::Mat型に変換
-    //    pol_chunk.TranslatePointerToMatrix(pImage);
-    //    pol_chunk.CalculateIntensity();
-    //    pol_chunk.I_max.convertTo(pol_chunk.I_max, CV_8UC1);
-    //    // イメージのリサイズ
-    //    // cv::resize(img, img, cv::Size(), 0.5, 0.5);
-    //    cv::imshow("polarizeddata", pol_chunk.I_max);
-    //    pDevice->RequeueBuffer(pImage);
-    //    cv::waitKey(WAITTIME);
-    //}
-    //cv::destroyAllWindows();
+
 
 // ストリームの開始，終了まではここで行う
 void AcquireImage( IDevice* pDevice ){
@@ -108,7 +117,7 @@ void AcquireImage( IDevice* pDevice ){
     Polarized pol_chunk(pDevice, deg0.get(), deg45.get(), deg90.get(), deg135.get());
     
     //偏光動画像の再生
-    RunOpencvPolarizedVideo(pDevice, pNodeMap, pol_chunk, "theta");
+    RunOpencvPolarizedVideo(pDevice, pNodeMap, pol_chunk, "45");
 
     // ストリームの停止
     std::cout << "ストリームの停止\n";

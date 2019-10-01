@@ -8,6 +8,9 @@
 #define WIDTH                                   2448
 #define HEIGHT                                  2048
 #define TIMEOUT                                 2000
+#define BLUE_GAIN                               2.87
+#define GREEN_GAIN                              1.0 
+#define RED_GAIN                                1.35
 
 using namespace Arena;
 
@@ -50,3 +53,5 @@ struct Polarized{
 
     void ConvertAoLPmonoToHSV();
 };
+
+void ApplyWhiteBalance(cv::Mat& img);
