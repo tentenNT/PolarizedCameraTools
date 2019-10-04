@@ -26,7 +26,7 @@ set(FFMPEGLIBS -lavcodec
                )
 
 # polarized_def.cppとstreaming_def.cppをコンパイルしてライブラリを作成
-add_library(tool_kit polarized_def.cpp streaming_def.cpp)
+add_library(tool_kit polarized.cpp streaming.cpp general_image_processing.cpp test/testcode.cpp)
 
 # コンパイルオプションの指定
 target_compile_options(tool_kit PUBLIC -Wall -g -Wno-unknown-pragmas -O2 -std=c++11 )
@@ -42,6 +42,7 @@ target_include_directories(tool_kit PUBLIC
                 ${ArenaSDK_ROOTDIR}/include/GenTL
                 ${ArenaSDK_ROOTDIR}/GenICam/library/CPP/include
                 ${PROJECT_SOURCE_DIR}/include
+                ${PROJECT_SOURCE_DIR}/include/test
                 )
 
 # ライブラリディレクトリの指定

@@ -28,20 +28,22 @@ void Polarized::GetPolarizedData(IImage* pImage){
 void Polarized::TranslatePointerToMatrix(IImage* pImage){
     int rows = (int)pImage->GetHeight() / 2;
     int cols = (int)pImage->GetWidth() / 2;
+    // uchar型
     deg0_mat = cv::Mat(rows, cols, CV_8UC1, pDeg0);
     deg45_mat = cv::Mat(rows, cols, CV_8UC1, pDeg45);
     deg90_mat = cv::Mat(rows, cols, CV_8UC1, pDeg90);
     deg135_mat = cv::Mat(rows, cols, CV_8UC1, pDeg135);
-}
-
-// I_max, I_minを計算
-void Polarized::CalculateIntensity(){
-    //CV_8UC1は0~255だがCV_32FC1は0~1.0を取るので注意する必要がある
+    // float型
     deg0_mat.convertTo(deg0_mat_f, CV_32F);
     deg45_mat.convertTo(deg45_mat_f, CV_32F);
     deg90_mat.convertTo(deg90_mat_f, CV_32F);
     deg135_mat.convertTo(deg135_mat_f, CV_32F);
+}
 
+
+// I_max, I_minを計算
+void Polarized::CalculateIntensity(){
+    //CV_8UC1は0~255だがCV_32FC1は0~1.0を取るので注意する必要がある
     C_1 = deg0_mat_f - deg90_mat_f;
     C_2 = deg135_mat_f - deg45_mat_f;
     cv::magnitude(C_1, C_2, R);
@@ -78,46 +80,11 @@ void Polarized::ConvertAoLPmonoToHSV(){
     });
     mat_v = mat_s;
     theta = theta * 180/ M_PI;
+    // 切り捨てだと思ったら四捨五入してる
     theta.convertTo(theta, CV_8UC1);
     const std::vector<cv::Mat> mv{theta, mat_s, mat_v};
     cv::merge(mv, mat_hsv);
     cv::cvtColor(mat_hsv, mat_hsv, cv::COLOR_HSV2BGR);
     theta_c3 = mat_hsv;
 }
-
-// polarized関係ない
-void ApplyWhiteBalance(cv::Mat& img){
-    //CV_8UC3のままで計算したら飽和して出力がおかしくなった
-    //どうもuchar型で計算するのはよろしくないことが起こることが多いようだ
-    img.convertTo(img, CV_32FC3);
-    img.forEach<cv::Point3_<float>>([](cv::Point3_<float> &p, const int* position) -> void{
-        p.x *= BLUE_GAIN;
-        p.y *= GREEN_GAIN;
-        p.z *= RED_GAIN;
-    });
-    img.convertTo(img, CV_8UC3);
-}
-
-
-//// OpenCVで動画像を取得
-//void RunOpencvVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap){
-//    gcstring windowName = GetNodeValue<GenICam::gcstring>(pNodeMap, "DeviceModelName") + " (" + GetNodeValue<GenICam::gcstring>(pNodeMap, "DeviceSerialNumber") + ")";
-//
-//    IImage *pImage;
-//    cv::Mat img;
-//
-//    double framesPerSecond = GetNodeValue<double>(pNodeMap, "AcquisitionFrameRate");
-//
-//    for (int i = 0; i < framesPerSecond * STREAMINGTIME;  i++){
-//        pImage = pDevice->GetImage(TIMEOUT);
-//        img = cv::Mat((int)pImage->GetHeight(), (int)pImage->GetWidth(), CV_8UC1, (void *)pImage->GetData());
-//        //イメージのリサイズ
-//        cv::resize(img, img, cv::Size(), 0.5, 0.5);
-//
-//        cv::imshow(windowName.c_str(), img);
-//        pDevice->RequeueBuffer(pImage);
-//        cv::waitKey(WAITTIME);
-//    }
-//    cv::destroyAllWindows();
-//}
 

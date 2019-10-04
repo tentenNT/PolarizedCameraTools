@@ -2,7 +2,7 @@
 
 #include "ArenaApi.h"
 #include "SaveApi.h"
-#include "streaming_def.hpp"
+#include "streaming.hpp"
 #include "polarized.hpp"
 #include <iostream>
 #include <fstream>
