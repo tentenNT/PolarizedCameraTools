@@ -7,7 +7,6 @@
 
 #define WIDTH                                   2448
 #define HEIGHT                                  2048
-#define STREAMINGTIME                           5
 #define WAITTIME                                1
 
 using namespace Arena;
@@ -19,3 +18,5 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polar
 void AcquireImage( IDevice* pDevice );
 
 void ChoiceImage(cv::Mat& img, const std::string &choice);
+
+void CaptureImage(const cv::Mat& img, IImage* pImage, const int& key, const std::string& choice, int& count);

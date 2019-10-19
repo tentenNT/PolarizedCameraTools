@@ -86,8 +86,29 @@ int ChoiceImage(cv::Mat& img, Polarized pol_chunk, const std::string &choice){
     return 0;
 }
 
+void CaptureImage(const cv::Mat& img, IImage* pImage, const int& key, const std::string& choice, int& count){
+        if(key == 's'){
+            std::ofstream f_raw, f_csv;
+            std::vector<int> compression_params;
+            compression_params.push_back(cv::IMWRITE_PXM_BINARY);
+            compression_params.push_back(0);
+            cv::imwrite(choice + std::to_string(count) + ".png", img);
+            cv::imwrite(choice + std::to_string(count) + ".pgm", img, compression_params);
+            cv::imwrite(choice + std::to_string(count) + ".ppm", img, compression_params);
+            f_raw.open(choice + std::to_string(count) + ".raw", std::ios::binary);
+            f_raw.write((char*)pImage->GetData(), pImage->GetSizeOfBuffer());
+            f_raw.close();
+            // 多分csvへの書き込みが一番重い
+            // 必要になったら適当なコンテナにcv::Matを押し込んでいこう
+            f_csv.open(choice + std::to_string(count) + ".csv");
+            f_csv << cv::format(img, cv::Formatter::FMT_CSV) << std::endl;
+            f_csv.close();
+            std::cout << "captured: " << std::to_string(count) << std::endl;
+            count++;
+        }
+}
 
-void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polarized pol_chunk, std::string choice){
+void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polarized pol_chunk, std::string choice, int streaming_time){
     IImage* pImage;
     // ちゃんとインスタンス化する
     cv::Mat img(pol_chunk.rows, pol_chunk.cols, CV_32FC1);
@@ -95,7 +116,7 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polar
     int count = 0;
     double framesPerSecond = GetNodeValue<double>(pNodeMap, "AcquisitionFrameRate");
 
-    for (int i = 0; i < framesPerSecond * STREAMINGTIME;  i++){
+    for (int i = 0; i < framesPerSecond * streaming_time;  i++){
         pImage = pDevice->GetImage(TIMEOUT);
         // 偏光データを取得
         pol_chunk.GetPolarizedData(pImage);
@@ -105,14 +126,23 @@ void RunOpencvPolarizedVideo(IDevice* pDevice, GenApi::INodeMap* pNodeMap, Polar
         if(ChoiceImage(img, pol_chunk, choice)){
             break;
         }
-        img.convertTo(img, CV_8UC1);
+        img.convertTo(img, CV_8UC1); // imgがCV_8UC3でも問題なし？
+        // cv::GaussianBlur(img, img, cv::Size(3, 3), 0, 0);
+        // cv::medianBlur(img, img, 3);
+        // img.convertTo(img, CV_16SC1); // どうも見た目では違いが分からない
+        // cv::Sobel(img, img, CV_16S, 2, 2, 7);
+        // img.convertTo(img, CV_8UC1); // imgがCV_8UC3でも問題なし？
+        // cv::Scharr(img, img, CV_8U, 1, 0);
+        // cv::Mat element;
+        // cv::erode(img, img, element, cv::Point(-1, -1), 1);
+        // cv::dilate(img, img, element, cv::Point(-1, -1), 2);
+        // cv::morphologyEx(img, img, cv::MORPH_CLOSE, element, cv::Point(-1, -1), 2);
+        // cv::morphologyEx(img, img, cv::MORPH_CLOSE, element, cv::Point(-1, -1), 2);
+//        cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
+//        cv::Canny(img, img, 10, 50);
         cv::imshow("polarizeddata", img);
         key = cv::waitKey(WAITTIME);
-        if(key == 's'){
-            cv::imwrite(choice + std::to_string(count) + ".png", img);
-            std::cout >> "captured: " >> std::to_string(count) >> std::endl;
-            count++
-        }
+        CaptureImage(img, pImage, key, choice, count);
         pDevice->RequeueBuffer(pImage);
     }
     cv::destroyAllWindows();
@@ -163,9 +193,10 @@ void AcquireImage( IDevice* pDevice ){
     std::string choice;
     std::cout << "見たい画像の形式を入力して下さい" << std::endl;
     std::cin >> choice;
-    RunOpencvPolarizedVideo(pDevice, pNodeMap, pol_chunk, choice);
-    // ストリームの停止
-    RunOpencvPolarizedVideo(pDevice, pNodeMap, pol_chunk, "I_min");
+    int streaming_time;
+    std::cout << "再生時間を入力して下さい" << std::endl;
+    std::cin >> streaming_time;
+    RunOpencvPolarizedVideo(pDevice, pNodeMap, pol_chunk, choice, streaming_time);
     std::cout << "ストリームの停止\n";
     pDevice->StopStream();
 }

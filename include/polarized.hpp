@@ -20,6 +20,7 @@ struct Polarized{
     cv::Mat deg0_mat_f, deg45_mat_f, deg90_mat_f, deg135_mat_f, C_1, C_2, R, I_a, I_b;
     //偏光のパラメータ
     cv::Mat I_max, I_min, rho, theta, theta_c3;
+    cv::Mat s_1, s_2, s_3;
 
     int rows, cols;
     
